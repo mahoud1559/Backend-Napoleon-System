@@ -29,4 +29,17 @@ const allCenters = async (req, res) => {
     }
 }
 
-module.exports = {addCenter, allCenters}
+const centerById = async (req, res) => {
+    const {name} = req.params
+    console.log("Center name: ", name)
+    try{
+        const center = await Center.findOne({name})
+        res.status(200).json(center)
+    }
+    catch(error){
+        console.log("Can not get center");
+        res.status(400).json({ error: error.message });
+    }
+}
+
+module.exports = {addCenter, allCenters, centerById}

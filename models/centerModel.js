@@ -2,6 +2,26 @@ const mongoose = require('mongoose')
 const { ObjectId } = mongoose.Schema.Types
 
 const Schema = mongoose.Schema
+
+const moneySchema = new Schema({
+    date: {
+        type: Date,
+        default: Date.now
+    },
+    amount: {
+        type: Number,
+        default: 0
+    },
+    paid: {
+        type: Number,
+        default: 0
+    },
+    remaining: {
+        type: Number,
+        default: 0
+    }
+})
+
 const centerSchema = new Schema({
     name: {
         type: String,
@@ -15,6 +35,7 @@ const centerSchema = new Schema({
         type: ObjectId,
         ref: 'Group'
     }],
+    money: [moneySchema],
     paid: {
         type: Number,
         default: 0

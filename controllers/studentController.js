@@ -57,7 +57,13 @@ const addStudent = async (req, res) => {
         if (findGroup.validSeats === 0) {
           throw Error("لا يوجد مقاعد متاحة في هذه المجموعة");
         } else {
-          const student = new Student({
+          const studentClass = {
+            sort: findGroup.currentClass,
+            month: findGroup.currentMonth,
+            active: false,
+          }
+
+            const student = new Student({
             name,
             phone,
             parentPhone,
@@ -65,7 +71,8 @@ const addStudent = async (req, res) => {
             group: findGroup,
             code,
             payment,
-          });
+            class: [studentClass]
+            });
           await student.save();
           console.log("Student added successfully..");
           findGroup.validSeats = findGroup.validSeats - 1;
@@ -251,20 +258,55 @@ const payStudent = async (req, res) => {
     if (paymentPrice > student.group.pricePerMonth) {
       throw Error("القيمة المدخلة أكبر من مستحقات الشهر");
     }
+    if(student.money < paymentPrice){
+      throw Error("المبلغ المدخل أكبر مما يجب دفعه");
+    }
     const group = await Group.findById(student.group._id);
-    if(group.payment === "دفع بالحصة" && paymentPrice < group.pricePerClass){
+    if(paymentPrice < group.pricePerClass){
         throw Error("القيمة المدخلة أقل من قيمة الحصة");
     }
     if(group.payment === "دفع بالشهر" && paymentPrice < group.pricePerMonth){
         throw Error("القيمة المدخلة أقل من قيمة الشهر");
     }
+
+  
+    const centerMoneyPerClass = student.group.centerPricePerClass;
+    let centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * paymentPrice
+
+    console.log("Center amount: ", centerAmount);
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const existingMoney = center.money.find((money) => money.date.toISOString().slice(0, 10) === today);
+
+    if (existingMoney) {
+      existingMoney.amount += centerAmount;
+      existingMoney.remaining += centerAmount;
+    } else {
+      center.money.push({
+        date: new Date().toISOString().slice(0, 10),
+        amount: centerAmount,
+        paid: 0,
+        remaining: centerAmount,
+      });
+    }
+
     if (paymentPrice === student.group.pricePerMonth) {
       student.paymentStatus = "دفع"
-      center.remaining = center.remaining + paymentPrice;
+      student.money = student.money - paymentPrice;
     }
+    if(paymentPrice < student.group.pricePerMonth){
+      student.money = student.money - paymentPrice;
+    }
+    center.remaining = 0;
+    for (const money of center.money) {
+      center.remaining += money.remaining;
+    }
+
     await center.save();
     await student.save();
     console.log("Student: ", student);
+    console.log("Center: ", center);
     // console.log("Payment: ", payment);
     res.status(200).json({ message: "تم الدفع بنجاح" });
   }
@@ -273,6 +315,165 @@ const payStudent = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 }
+
+const startClass = async (req, res) =>{
+  const {group} = req.body;
+  try{
+    const g = await Group.findOne({name: group});
+    console.log("Group Name: ", group);
+    console.log("Group: ", g);
+    const students = await Student.find({group: g._id});
+    let newClass = {
+      sort: 0,
+      month: 0,
+      active: false
+    }
+    
+    let currentMonth = 1;
+    let currentClass = 0;
+
+    for (const student of students) {
+      currentMonth = g.currentMonth;
+      currentClass = g.currentClass;
+      let newClassOrder = 0;
+      const latestClass = student.class.find((cls) => cls.sort === currentClass && cls.month === currentMonth);
+
+      if (latestClass) {
+        if (latestClass.active) {
+          throw Error("الحصة الحالية لم تنتهي بعد");
+        }
+        if(latestClass.sort === 8){
+          newClassOrder = 1;
+          currentMonth++;
+          student.money += g.pricePerMonth;
+        }
+        else{
+          newClassOrder = g.currentClass + 1;
+        }
+      }
+      // console.log("price per month: ", g.pricePerMonth);
+      if(newClassOrder === 0){
+        newClassOrder = 1;
+      }
+
+      if(newClassOrder === 1 && currentMonth === 1){
+        student.money = g.pricePerMonth;
+      }
+
+      newClass = {
+        sort: newClassOrder,
+        month: currentMonth,
+        active: true
+      }
+
+
+      student.class.push(newClass);
+
+      await student.save();
+    }
+    
+    if(currentClass === 8){
+      g.currentClass = 1;
+      g.currentMonth += 1;
+    }
+    else{
+      g.currentClass += 1;
+    }
+
+    await g.save();
+
+    res.status(200).json({ 
+      class: newClass,
+      message: 'Classes started successfully!' });
+  }
+  catch(error){
+    console.error("Error in starting class:", error);
+    res.status(500).json({error: error.message});
+  }
+}
+
+const endClass = async (req, res) => {
+  const {group} = req.body;
+  try{
+    const g = await Group.findOne({name: group});
+    console.log("Group: ", g);
+    console.log("Group Name: ", group);
+    const students = await Student.find({ group: g._id });
+
+    for (const student of students) {
+      let currentMonth = g.currentMonth;
+      let currentClass = g.currentClass;
+      const latestClass = student.class.find((cls) => cls.sort === currentClass && cls.month === currentMonth && cls.active === true);
+      console.log("Latest class: ", latestClass);
+
+      if (latestClass) {
+        if (latestClass.active) {
+        latestClass.active = false;
+
+        let absentCount = 0;
+        for (let i = 0; i < 3; i++) {
+          if (student.class[student.class.length - 1 - i]?.attendance === "غائب") {
+            absentCount++;
+          }
+        }
+
+        if (absentCount === 3) {
+          student.status = "ملغي";
+        }
+
+        await student.save();
+      }
+      else{
+        throw Error("هذه الحصة ليست نشطة حالياً");
+      }
+    }
+    else{
+      throw Error("لا توجد حصة نشطة حالياً");
+    }
+      
+    }
+
+    res.status(200).json({ message: 'Class ended successfully!' });
+  } catch (error) {
+    console.error("Error in ending class:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const studentAttendance = async (req, res) => {
+  const {code, group} = req.body
+  try {
+    console.log("Code: ", code);
+    console.log("Group: ", group);
+    const g = await Group.findOne({name: group})
+    console.log("Attending Group: ", g);
+    if(!g){
+      throw Error("يجب تسجيل المجموعة")
+    }
+    const student = await Student.findOne({code, group: g._id}).populate("group");
+    if(!student){
+      throw Error("هذا الطالب غير مسجل");
+    }
+    const latestClass = student.class.find((cls) => cls.sort === g.currentClass && cls.month === g.currentMonth);
+    console.log("Latest Class: ", latestClass);
+    if(!latestClass.active){
+      throw Error("هذه الحصة ليست نشطة حالياً");
+    }
+    if(latestClass.attendance === "حاضر"){
+      throw Error("هذا الطالب حضر بالفعل");
+    }
+    latestClass.attendance = "حاضر";
+    await student.save();
+    res.status(200).json({
+      student,
+      message: "تم تسجيل حضور الطالب بنجاح"
+    });
+  } catch (error) {
+    console.error("Error in student attendance:", error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = {
   addStudent,
   getStudent,
@@ -280,5 +481,8 @@ module.exports = {
   deleteAllStudents,
   deleteStudent,
   editStudent,
-  payStudent
+  payStudent,
+  startClass,
+  endClass,
+  studentAttendance
 };

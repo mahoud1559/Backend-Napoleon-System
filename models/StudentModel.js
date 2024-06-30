@@ -3,6 +3,54 @@ const { ObjectId } = mongoose.Schema.Types;
 
 const Schema = mongoose.Schema;
 
+const classSchema = new Schema({
+  date:{
+    type: Date,
+    default: Date.now,
+  },
+  sort:{
+    type: Number,
+    required: true,
+  },
+  month: {
+    type: Number,
+    required: true,
+  },
+  attendance: {
+    type: String,
+    enum: ["حاضر", "غائب", ""],
+    default: "",
+  },
+  active:{
+    type: Boolean,
+    default: false,
+  },
+})
+
+const examSchema = new Schema({
+    examName: {
+        type: String,
+        required: true,
+    },
+    studentMark:{
+        type: Number,
+        required: true,
+    },
+    examMark: {
+        type: Number,
+        required: true,
+    },
+    examDate: {
+        type: Date,
+        default: Date.now,
+    },
+    examType: {
+        type: String,
+        enum: ["امتحان", "كويز"],
+        required: true,
+    },
+})
+
 const studentSchema = new Schema({
   name: {
     type: String,
@@ -14,6 +62,10 @@ const studentSchema = new Schema({
   },
   parentPhone: {
     type: Number,
+    required: true,
+  },
+  class: {
+    type: [classSchema],
     required: true,
   },
   grade: {
@@ -40,13 +92,21 @@ const studentSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ["مسجل", "ملغي"],
+    enum: ["مسجل", "ملغي", "محظور"],
     default: "مسجل",
   },
   paymentStatus: {
     type: String,
     enum: ["دفع", "لم يدفع", "حالة خاصة"],
     default: "لم يدفع",
+  },
+  money: {
+    type: Number,
+    default: 0,
+  },
+  exams: {
+    type: [examSchema],
+    default: [],
   },
 });
 

@@ -48,8 +48,15 @@ const addBook = async (req, res) =>{
 
 const getAllBooks = async (req, res) => {
     try {
-        const books = await PrintHouse.find({}, 'books');
-        res.status(200).json({ books });
+        const printHouses = await PrintHouse.find({});
+        const booksWithPrintHouseName = printHouses.flatMap(printHouse => {
+            return printHouse.books.map(book => ({
+              ...book.toObject(),
+              printHouseName: printHouse.name
+            }));
+          });
+      
+          res.status(200).json({ books: booksWithPrintHouseName });
     }
     catch (error) {
         res.status(404).json({ message: error.message });

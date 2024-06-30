@@ -15,7 +15,7 @@ const groupSchema = new Schema({
     type: {
         type: String,
         enum: ['دابل', 'عادي'],
-        required: true
+        default: 'دابل'
     },
     center: {
         type: String,
@@ -24,6 +24,14 @@ const groupSchema = new Schema({
     maxCount: {
         type: Number,
         required: true
+    },
+    currentClass:{
+        type: Number,
+        default: 0
+    },
+    currentMonth:{
+        type: Number,
+        default: 1
     },
     validSeats: {
         type: Number,
