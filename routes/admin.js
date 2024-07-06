@@ -5,7 +5,7 @@ const upload = multer({ dest: "uploads/" });
 const {loginAdmin, alladmins, addAdmin} = require('../controllers/adminController')
 const {addGroup, getGroup, allGroups, editGroup, deleteAllGroups} = require('../controllers/groupController')
 const {
-    addStudent, getStudent, 
+    addStudent, getStudent, getAllStudents,
     searchCode, deleteAllStudents, 
     deleteStudent, editStudent, payStudent,
     startClass, endClass, studentAttendance
@@ -23,7 +23,7 @@ const {
     payExpense, deleteAllExpenses
      } = require('../controllers/expensesController')
 
-const {addCenter, allCenters, centerById} = require('../controllers/centerController')
+const {addCenter, allCenters, centerByName, deleteCenter} = require('../controllers/centerController')
 const {addExam, getExams} = require('../controllers/examController')
 
 const router = express.Router()
@@ -40,6 +40,7 @@ router.delete('/deleteAllGroups', deleteAllGroups)
 
 router.post('/addStudent', addStudent)
 router.get('/search', searchCode)
+router.get('/getAllStudents', getAllStudents)
 router.post('/getStudent', getStudent)
 router.delete('/deleteAllStudents', deleteAllStudents)
 router.delete('/deleteStudent/:code', deleteStudent)
@@ -65,7 +66,8 @@ router.delete('/deleteExpenses', deleteAllExpenses)
 
 router.post('/addCenter', addCenter)
 router.get('/centers', allCenters)
-router.get('/center/:name', centerById)
+router.get('/center/:name', centerByName)
+router.delete('/deletecenter', deleteCenter)
 
 router.patch('/startClass', startClass)
 router.patch('/endClass', endClass)

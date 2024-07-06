@@ -29,11 +29,11 @@ const allCenters = async (req, res) => {
     }
 }
 
-const centerById = async (req, res) => {
+const centerByName = async (req, res) => {
     const {name} = req.params
     console.log("Center name: ", name)
     try{
-        const center = await Center.findOne({name})
+        const center = await Center.findOne({name}).populate('money.moneyDetails.group')
         res.status(200).json(center)
     }
     catch(error){
@@ -42,4 +42,18 @@ const centerById = async (req, res) => {
     }
 }
 
-module.exports = {addCenter, allCenters, centerById}
+const deleteCenter = async (req, res) => {
+    const {name} = req.body
+    try{
+        const center = await Center.findOneAndDelete({name})
+        .populate('money.moneyDetails.group')
+        console.log("Center deleted successfully..")
+        res.status(200).json({message:"Center deleted successfully.."})
+    }
+    catch(error){
+        console.log("Can not delete center");
+        res.status(400).json({ error: error.message });
+    }
+}
+
+module.exports = {addCenter, allCenters, centerByName, deleteCenter}

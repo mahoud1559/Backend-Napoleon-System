@@ -7,6 +7,7 @@ const addStudent = async (req, res) => {
   console.log(name, phone, parentPhone, grade, group, code, payment);
   console.log("Grade: ", grade);
   try {
+    let studentMoney = 0;
     if (
       !name ||
       !phone ||
@@ -57,12 +58,13 @@ const addStudent = async (req, res) => {
         if (findGroup.validSeats === 0) {
           throw Error("لا يوجد مقاعد متاحة في هذه المجموعة");
         } else {
+          studentMoney = findGroup.pricePerClass * (8 - findGroup.currentClass);
+          console.log("Student Money: ", studentMoney);
           const studentClass = {
             sort: findGroup.currentClass,
             month: findGroup.currentMonth,
-            active: false,
+            attendance: "حاضر",
           }
-
             const student = new Student({
             name,
             phone,
@@ -71,7 +73,8 @@ const addStudent = async (req, res) => {
             group: findGroup,
             code,
             payment,
-            class: [studentClass]
+            class: [studentClass],
+            money: studentMoney,
             });
           await student.save();
           console.log("Student added successfully..");
@@ -120,6 +123,17 @@ const getStudent = async (req, res) => {
       .json({ error: "Error in filtering students by grade and groups:" });
   }
 };
+const getAllStudents = async (req, res) => {
+  try {
+    const students = await Student.find({}).populate("group");
+    res.status(200).json(students);
+  } catch (error) {
+    console.error("Error in getting all students:", error);
+    res.status(500).json({ error: "Error in getting all students:" });
+  }
+
+}
+
 const deleteStudent = async (req, res) => {
   const { code } = req.params;
   console.log("Code to delete: ", code);
@@ -242,10 +256,11 @@ const editStudent = async (req, res) => {
 const payStudent = async (req, res) => {
   const { id } = req.params;
   const { paymentPrice} = req.body;
+  console.log("Payment Price: ", paymentPrice);
+  console.log("Student ID: ", id)
   try {
     const student = await Student.findById(id).populate("group");
     const center = await Center.findOne({ name: student.group.center });
-    // console.log("Center: ", center);
     if (!student) {
       throw Error("Student not found");
     }
@@ -265,10 +280,6 @@ const payStudent = async (req, res) => {
     if(paymentPrice < group.pricePerClass){
         throw Error("القيمة المدخلة أقل من قيمة الحصة");
     }
-    if(group.payment === "دفع بالشهر" && paymentPrice < group.pricePerMonth){
-        throw Error("القيمة المدخلة أقل من قيمة الشهر");
-    }
-
   
     const centerMoneyPerClass = student.group.centerPricePerClass;
     let centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * paymentPrice
@@ -278,31 +289,50 @@ const payStudent = async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
 
     const existingMoney = center.money.find((money) => money.date.toISOString().slice(0, 10) === today);
-
+    
     if (existingMoney) {
       existingMoney.amount += centerAmount;
       existingMoney.remaining += centerAmount;
-    } else {
+      const moneyDetails = existingMoney.moneyDetails.find((money) => money.group === group._id);
+      if (moneyDetails) {
+        moneyDetails.total += centerAmount;
+        moneyDetails.StudentsCount += 1;
+      }
+      else {
+        existingMoney.moneyDetails.push({
+          group: group._id,
+          total: centerAmount,
+          StudentsCount: 1,
+        });
+      }
+    }
+     else {
       center.money.push({
         date: new Date().toISOString().slice(0, 10),
         amount: centerAmount,
         paid: 0,
         remaining: centerAmount,
+        moneyDetails: [
+          {
+            group: student.group._id,
+            total: centerAmount,
+            StudentsCount: 1,
+          },
+        ],
       });
     }
 
     if (paymentPrice === student.group.pricePerMonth) {
       student.paymentStatus = "دفع"
-      student.money = student.money - paymentPrice;
     }
-    if(paymentPrice < student.group.pricePerMonth){
-      student.money = student.money - paymentPrice;
-    }
+
     center.remaining = 0;
     for (const money of center.money) {
       center.remaining += money.remaining;
     }
 
+    console.log("student.money - paymentPrice = ", student.money - paymentPrice)
+    student.money = student.money - paymentPrice;
     await center.save();
     await student.save();
     console.log("Student: ", student);
@@ -317,16 +347,27 @@ const payStudent = async (req, res) => {
 }
 
 const startClass = async (req, res) =>{
-  const {group} = req.body;
-  try{
-    const g = await Group.findOne({name: group});
+  const { group } = req.body;
+  try {
+    const g = await Group.findOne({ name: group });
     console.log("Group Name: ", group);
-    console.log("Group: ", g);
-    const students = await Student.find({group: g._id});
+    console.log("Found Group: ", g);
+    let classIncrement = 0;
+    if(g.type === "دابل"){
+      classIncrement = 2;
+    }
+    else if(g.type === "عادي"){
+      classIncrement = 1;
+    }
+    const id = g._id;
+    const students = await Student.find({group: id});
+    console.log("Students: ", students);
+    if (!g) {
+      throw Error("يجب تسجيل المجموعة");
+    }
     let newClass = {
       sort: 0,
       month: 0,
-      active: false
     }
     
     let currentMonth = 1;
@@ -336,34 +377,40 @@ const startClass = async (req, res) =>{
       currentMonth = g.currentMonth;
       currentClass = g.currentClass;
       let newClassOrder = 0;
-      const latestClass = student.class.find((cls) => cls.sort === currentClass && cls.month === currentMonth);
 
+      if(g.currentClass === 1 && g.currentMonth === 1){
+        console.log("First class and student money updated..");
+        student.money = g.pricePerMonth;
+      }
+
+      const latestClass = student.class.find((cls) => cls.sort === currentClass && cls.month === currentMonth);
+      console.log("Latest class: ", latestClass);
       if (latestClass) {
-        if (latestClass.active) {
+        newClassOrder = latestClass.sort;
+        if (g.classActive) {
+          console.log("Class is active");
           throw Error("الحصة الحالية لم تنتهي بعد");
         }
         if(latestClass.sort === 8){
-          newClassOrder = 1;
+          console.log("Class sort is 8");
+          newClassOrder += classIncrement;
           currentMonth++;
           student.money += g.pricePerMonth;
         }
         else{
-          newClassOrder = g.currentClass + 1;
+          console.log("Class sort is not 8");
+          newClassOrder += classIncrement;
         }
       }
-      // console.log("price per month: ", g.pricePerMonth);
+
       if(newClassOrder === 0){
-        newClassOrder = 1;
+        console.log("New Class Order is 0");
+        newClassOrder += classIncrement;
       }
-
-      if(newClassOrder === 1 && currentMonth === 1){
-        student.money = g.pricePerMonth;
-      }
-
+      console.log("New Class Order: ", newClassOrder);
       newClass = {
         sort: newClassOrder,
         month: currentMonth,
-        active: true
       }
 
 
@@ -372,18 +419,21 @@ const startClass = async (req, res) =>{
       await student.save();
     }
     
-    if(currentClass === 8){
-      g.currentClass = 1;
+    if(g.currentClass === 8){
+      g.currentClass += classIncrement;
       g.currentMonth += 1;
     }
     else{
-      g.currentClass += 1;
+      g.currentClass += classIncrement;
     }
+    g.classActive = true;
 
     await g.save();
+    console.log("New Class: ", newClass);
 
     res.status(200).json({ 
       class: newClass,
+      group: g,
       message: 'Classes started successfully!' });
   }
   catch(error){
@@ -393,47 +443,57 @@ const startClass = async (req, res) =>{
 }
 
 const endClass = async (req, res) => {
-  const {group} = req.body;
-  try{
-    const g = await Group.findOne({name: group});
-    console.log("Group: ", g);
+  const { group } = req.body;
+  try {
+    const g = await Group.findOne({ name: group });
     console.log("Group Name: ", group);
-    const students = await Student.find({ group: g._id });
+    console.log("Found Group: ", g);
+    if (!g) {
+      throw Error("يجب تسجيل المجموعة");
+    }
+    const id = g._id
+    console.log("Group id: ", id)
+    console.log("g._id", g._id)
+    const students = await Student.find({ group: id });
+    console.log("Students: ", students);
 
     for (const student of students) {
       let currentMonth = g.currentMonth;
       let currentClass = g.currentClass;
-      const latestClass = student.class.find((cls) => cls.sort === currentClass && cls.month === currentMonth && cls.active === true);
+      const latestClass = student.class.find(
+        (cls) =>
+          cls.sort === g.currentClass && cls.month === g.currentMonth
+      );
       console.log("Latest class: ", latestClass);
 
       if (latestClass) {
-        if (latestClass.active) {
-        latestClass.active = false;
+        if (g.classActive) {
+          let continuousAbsence = 0;
 
-        let absentCount = 0;
-        for (let i = 0; i < 3; i++) {
-          if (student.class[student.class.length - 1 - i]?.attendance === "غائب") {
-            absentCount++;
+          for (let i = 0; i < student.class.length; i++) {
+            if (student.class[i]?.attendance === "غائب") {
+              student.absence = student.absence + 1;
+              continuousAbsence++;
+            }
+            else if (student.class[i]?.attendance === "حاضر" && continuousAbsence < 3){
+              continuousAbsence = 0;
+            }
           }
+
+          if (continuousAbsence >= 3) {
+            student.status = "ملغي";
+          }
+          await student.save();
+        } else {
+          throw Error("هذه الحصة ليست نشطة حالياً");
         }
-
-        if (absentCount === 3) {
-          student.status = "ملغي";
-        }
-
-        await student.save();
-      }
-      else{
-        throw Error("هذه الحصة ليست نشطة حالياً");
+      } else {
+        throw Error("يوجد خطأ في إنهاء الحصة");
       }
     }
-    else{
-      throw Error("لا توجد حصة نشطة حالياً");
-    }
-      
-    }
-
-    res.status(200).json({ message: 'Class ended successfully!' });
+    g.classActive = false;
+    await g.save();
+    res.status(200).json({ students, message: "Class ended successfully!" });
   } catch (error) {
     console.error("Error in ending class:", error);
     res.status(500).json({ error: error.message });
@@ -450,19 +510,25 @@ const studentAttendance = async (req, res) => {
     if(!g){
       throw Error("يجب تسجيل المجموعة")
     }
-    const student = await Student.findOne({code, group: g._id}).populate("group");
+    const student = await Student.findOne({code}).populate("group");
+    console.log("Attending Student: ", student);
     if(!student){
       throw Error("هذا الطالب غير مسجل");
     }
+    const length = student.class.length
+    console.log("Length: ", length)
+    console.log("Student Current Class: ", student.class[length - 1].sort);
     const latestClass = student.class.find((cls) => cls.sort === g.currentClass && cls.month === g.currentMonth);
     console.log("Latest Class: ", latestClass);
-    if(!latestClass.active){
+    if(!g.classActive){
       throw Error("هذه الحصة ليست نشطة حالياً");
     }
-    if(latestClass.attendance === "حاضر"){
+    if(latestClass && latestClass.attendance === "حاضر"){
       throw Error("هذا الطالب حضر بالفعل");
     }
-    latestClass.attendance = "حاضر";
+    if(latestClass){
+      latestClass.attendance = "حاضر";
+    }
     await student.save();
     res.status(200).json({
       student,
@@ -477,6 +543,7 @@ const studentAttendance = async (req, res) => {
 module.exports = {
   addStudent,
   getStudent,
+  getAllStudents,
   searchCode,
   deleteAllStudents,
   deleteStudent,

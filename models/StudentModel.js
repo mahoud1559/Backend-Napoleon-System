@@ -19,11 +19,7 @@ const classSchema = new Schema({
   attendance: {
     type: String,
     enum: ["حاضر", "غائب", ""],
-    default: "",
-  },
-  active:{
-    type: Boolean,
-    default: false,
+    default: "غائب",
   },
 })
 
@@ -107,6 +103,10 @@ const studentSchema = new Schema({
   exams: {
     type: [examSchema],
     default: [],
+  },
+  absence: {
+    type: Number,
+    default: 0,
   },
 });
 

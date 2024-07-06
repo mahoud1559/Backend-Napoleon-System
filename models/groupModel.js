@@ -33,6 +33,10 @@ const groupSchema = new Schema({
         type: Number,
         default: 1
     },
+    classActive: {
+        type: Boolean,
+        default: false
+    },
     validSeats: {
         type: Number,
         required: true

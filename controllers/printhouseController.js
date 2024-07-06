@@ -77,10 +77,12 @@ const getPrintHouseBooks = async (req, res) => {
 const increaseStock = async (req, res) => {
     const {stock, book, printHouse} = req.body
     try{
+        console.log("data book: ", stock, book, printHouse)
         const print_House = await PrintHouse.findOne({name: printHouse})
+        console.log("print house: ", print_House)
         for (let i = 0; i < print_House.books.length; i++) {
             if (print_House.books[i].name === book) {
-                print_House.books[i].stock += stock
+                print_House.books[i].stock += parseInt(stock);
                 print_House.receivables += stock * print_House.books[i].profit
                 break;
             }
