@@ -58,13 +58,19 @@ const addStudent = async (req, res) => {
         if (findGroup.validSeats === 0) {
           throw Error("لا يوجد مقاعد متاحة في هذه المجموعة");
         } else {
-          studentMoney = findGroup.pricePerClass * (8 - findGroup.currentClass);
+          if(payment === "منحة"){
+            studentMoney = 0;
+          }
+          else{
+            studentMoney = findGroup.pricePerClass * (8 - findGroup.currentClass);
+          }
           console.log("Student Money: ", studentMoney);
           const studentClass = {
             sort: findGroup.currentClass,
             month: findGroup.currentMonth,
             attendance: "حاضر",
           }
+          console.log("Student Class: ", studentClass);
             const student = new Student({
             name,
             phone,
@@ -76,6 +82,7 @@ const addStudent = async (req, res) => {
             class: [studentClass],
             money: studentMoney,
             });
+          console.log("Student: ", student);
           await student.save();
           console.log("Student added successfully..");
           findGroup.validSeats = findGroup.validSeats - 1;
@@ -292,33 +299,66 @@ const payStudent = async (req, res) => {
     
     if (existingMoney) {
       existingMoney.amount += centerAmount;
-      existingMoney.remaining += centerAmount;
-      const moneyDetails = existingMoney.moneyDetails.find((money) => money.group === group._id);
-      if (moneyDetails) {
-        moneyDetails.total += centerAmount;
-        moneyDetails.StudentsCount += 1;
+      existingMoney.paid += centerAmount;
+      existingMoney.remaining -= centerAmount;
+      console.log("Existing Money: ", existingMoney);
+      const moneyDetails = existingMoney.moneyDetails.find((s) => s.studentCode === student.code);
+      console.log("Existing Money Money Details: ", existingMoney.moneyDetails);
+      if(moneyDetails){
+        moneyDetails.totalPaid += centerAmount;
+        moneyDetails.centerMoney += centerAmount;
+        moneyDetails.date = today;
       }
-      else {
+      else{
         existingMoney.moneyDetails.push({
-          group: group._id,
-          total: centerAmount,
-          StudentsCount: 1,
+          studentCode: student.code,
+          studentName: student.name,
+          group: group.name,
+          totalPaid: paymentPrice,
+          centerMoney: centerAmount,
+          date: today,
         });
       }
+      
+      // if (moneyDetails) {
+      //   moneyDetails.total += centerAmount;
+      //   moneyDetails.students.push({
+      //     studentCode: student.code,
+      //     studentName: student.name,
+      //     group: group.name,
+      //     totalPaid: paymentPrice,
+      //     centerMoney: centerAmount,
+      //     date: new Date().toISOString().slice(0, 10),
+      //   });
+      // }
+      // else {
+      //   existingMoney.moneyDetails.push({
+      //       students: [{
+      //         studentCode: student.code,
+      //         studentName: student.name,
+      //         group: group.name,
+      //         totalPaid: paymentPrice,
+      //         centerMoney: centerAmount,
+      //         date: new Date().toISOString().slice(0, 10),
+      //     }],
+      //     total: centerAmount,
+      //   });
+      // }
     }
      else {
       center.money.push({
         date: new Date().toISOString().slice(0, 10),
-        amount: centerAmount,
-        paid: 0,
-        remaining: centerAmount,
-        moneyDetails: [
-          {
-            group: student.group._id,
-            total: centerAmount,
-            StudentsCount: 1,
-          },
-        ],
+        amount: student.group.centerPricePerClass * 8,
+        paid: centerAmount,
+        remaining: student.group.centerPricePerClass * 8 - centerAmount,
+        moneyDetails:[{
+                studentCode: student.code,
+                studentName: student.name,
+                group: group.name,
+                totalPaid: centerAmount,
+                centerMoney: student.group.centerPricePerClass * 8,
+                date: new Date().toISOString().slice(0, 10),
+              }],
       });
     }
 
@@ -395,7 +435,12 @@ const startClass = async (req, res) =>{
           console.log("Class sort is 8");
           newClassOrder += classIncrement;
           currentMonth++;
-          student.money += g.pricePerMonth;
+          if(student.payment === "منحة"){
+            student.money = 0;
+          }
+          else{
+            student.money += g.pricePerMonth;
+          }
         }
         else{
           console.log("Class sort is not 8");
@@ -539,6 +584,7 @@ const studentAttendance = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 }
+
 
 module.exports = {
   addStudent,

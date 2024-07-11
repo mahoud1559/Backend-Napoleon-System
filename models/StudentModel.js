@@ -84,7 +84,7 @@ const studentSchema = new Schema({
   },
   payment: {
     type: String,
-    enum: ["دفع بالحصة", "دفع بالشهر", "حالة خاصة"],
+    enum: ["دفع بالحصة", "دفع بالشهر", "منحة"],
   },
   status: {
     type: String,

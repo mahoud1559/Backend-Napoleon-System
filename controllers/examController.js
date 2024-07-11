@@ -93,4 +93,80 @@ const getExams = async (req, res) => {
         res.status(400).json({message: error.message})
     }
 }
-module.exports = {addExam, getExams}
+
+const editExam = async (req, res) => {
+    try {
+        const { examId, examName, examMark, examGrade, examGroup, examType } = req.body;
+        const excelFile = req.file;
+        console.log("exam data: ", examName, examMark, examGrade, examType);
+        console.log("exam groups: ", examGroup);
+
+        if (!examId || !examName || !examMark || !examGrade || !examGroup || !examType || !excelFile) {
+            return res.status(400).json({ message: "يجب إدخال جميع البيانات المطلوبة" });
+        }
+
+        const examGroupArray = examGroup.split(',');
+
+        console.log("exam group length: ", examGroupArray.length);
+
+        for (let i = 0; i < examGroupArray.length; i++) {
+            console.log("group name: ", examGroupArray[i]);
+            const group = await Group.findOne({ name: examGroupArray[i] });
+            console.log("group: ", group);
+
+            if (!group) {
+                return res.status(400).json({ message: "المجموعة غير موجودة" });
+            }
+            examGroupArray[i] = group._id;
+            console.log("group id: ", examGroupArray[i]);
+        }
+
+        console.log("excel file: ", excelFile);
+        const workbook = xlsx.readFile(excelFile.path);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const excelData = xlsx.utils.sheet_to_json(worksheet);
+
+        console.log("excel data: ", excelData[0].code, excelData[0].studentMark);
+        for (let i = 0; i < excelData.length; i++) {
+            const { code, studentMark } = excelData[i];
+            console.log("code: ", code, "studentMark: ", studentMark, "examMark: ", examMark);
+            const student = await Student.findOne({ code });
+            if (student) {
+                const studentExam = {
+                    examName,
+                    studentMark,
+                    examMark,
+                    examType
+                };
+                const existingExamIndex = student.exams.findIndex(exam => exam.examName === examName);
+                if (existingExamIndex !== -1) {
+                    student.exams[existingExamIndex] = studentExam;
+                } else {
+                    student.exams.push(studentExam);
+                }
+                await student.save();
+            } else {
+                console.log("Student not found for code:", code);
+            }
+        }
+
+        const exam = await Exam.findById(examId);
+        if (!exam) {
+            return res.status(404).json({ message: "الامتحان غير موجود" });
+        }
+
+        exam.examName = examName;
+        exam.examMark = examMark;
+        exam.examGrade = examGrade;
+        exam.examGroup = examGroupArray.map(group => group._id);
+        exam.examType = examType;
+
+        await exam.save();
+
+        res.status(200).json({ exam });
+    } catch (error) {
+        console.log("Error: ", error.message);
+        res.status(400).json({ message: error.message });
+    }
+}
+module.exports = {addExam, getExams, editExam}

@@ -8,22 +8,32 @@ const moneySchema = new Schema({
         type: Date,
         default: Date.now
     },
-    moneyDetails: {
-        type: [{
+    moneyDetails: [{
+            studentCode: {
+                type: String,
+                required: true
+            },
+            studentName: {
+                type: String,
+                required: true
+            },
+            totalPaid: {
+                type: Number,
+                default: 0
+            },
+            centerMoney: {
+                type: Number,
+                default: 0
+            },
+            date: {
+                type: Date,
+                default: Date.now
+            },
             group:{
-                type: ObjectId,
-                ref: 'Group'
-            },
-            total: {
-                type: Number,
-                default: 0
-            },
-            StudentsCount: {
-                type: Number,
-                default: 0
-            },
-        }]
-    },
+                type: String,
+                required: true
+        }
+    }],
     amount: {
         type: Number,
         default: 0

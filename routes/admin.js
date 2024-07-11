@@ -24,7 +24,7 @@ const {
      } = require('../controllers/expensesController')
 
 const {addCenter, allCenters, centerByName, deleteCenter} = require('../controllers/centerController')
-const {addExam, getExams} = require('../controllers/examController')
+const {addExam, getExams, editExam} = require('../controllers/examController')
 
 const router = express.Router()
 
@@ -74,5 +74,6 @@ router.patch('/endClass', endClass)
 
 router.post("/addExam", upload.single("excelFile"), addExam);
 router.get("/exams", getExams);
+router.patch("/editexam", editExam);
 
 module.exports = router
