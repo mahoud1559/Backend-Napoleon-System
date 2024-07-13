@@ -59,9 +59,11 @@ const addStudent = async (req, res) => {
           throw Error("لا يوجد مقاعد متاحة في هذه المجموعة");
         } else {
           if(payment === "منحة"){
-            studentMoney = 0;
+            console.log("Payment is scholarship");
+            studentMoney = findGroup.centerPricePerClass * 8;
           }
           else{
+            console.log("Payment is not scholarship");
             studentMoney = findGroup.pricePerClass * (8 - findGroup.currentClass);
           }
           console.log("Student Money: ", studentMoney);
@@ -289,7 +291,16 @@ const payStudent = async (req, res) => {
     }
   
     const centerMoneyPerClass = student.group.centerPricePerClass;
-    let centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * paymentPrice
+    let centerAmount = 0
+    
+    if(student.payment === "منحة"){
+      centerAmount = paymentPrice;
+      console.log("Center amount scholarship: ", centerAmount);
+    }
+    else{
+      centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * paymentPrice
+      console.log("Center amount not scholarship: ", centerAmount);
+    }
 
     console.log("Center amount: ", centerAmount);
 
@@ -298,24 +309,26 @@ const payStudent = async (req, res) => {
     const existingMoney = center.money.find((money) => money.date.toISOString().slice(0, 10) === today);
     
     if (existingMoney) {
-      existingMoney.amount += centerAmount;
-      existingMoney.paid += centerAmount;
-      existingMoney.remaining -= centerAmount;
+      existingMoney.amount += parseInt(centerAmount);
+      existingMoney.paid += parseInt(centerAmount);
+      existingMoney.remaining = existingMoney.amount - existingMoney.paid;
+      console.log("Existing Money remaining: ", existingMoney.remaining);
       console.log("Existing Money: ", existingMoney);
       const moneyDetails = existingMoney.moneyDetails.find((s) => s.studentCode === student.code);
       console.log("Existing Money Money Details: ", existingMoney.moneyDetails);
       if(moneyDetails){
-        moneyDetails.totalPaid += centerAmount;
-        moneyDetails.centerMoney += centerAmount;
+        moneyDetails.totalPaid += parseInt(centerAmount);
+        moneyDetails.centerMoney += student.group.centerPricePerClass * 8;
         moneyDetails.date = today;
       }
       else{
+        console.log("total paid if existing money is empty: ", centerAmount);
         existingMoney.moneyDetails.push({
           studentCode: student.code,
           studentName: student.name,
           group: group.name,
-          totalPaid: paymentPrice,
-          centerMoney: centerAmount,
+          totalPaid: centerAmount,
+          centerMoney: student.group.centerPricePerClass * 8,
           date: today,
         });
       }
@@ -366,10 +379,8 @@ const payStudent = async (req, res) => {
       student.paymentStatus = "دفع"
     }
 
-    center.remaining = 0;
-    for (const money of center.money) {
-      center.remaining += money.remaining;
-    }
+    center.remaining += (student.group.centerPricePerClass * 8 - centerAmount);
+    center.paid += centerAmount;
 
     console.log("student.money - paymentPrice = ", student.money - paymentPrice)
     student.money = student.money - paymentPrice;
