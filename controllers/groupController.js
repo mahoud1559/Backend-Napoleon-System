@@ -1,5 +1,7 @@
 const Group = require('../models/groupModel')
+const Student = require('../models/StudentModel')
 const Center = require('../models/centerModel')
+const XLSX = require('xlsx');
 
 const addGroup = async (req, res) => {
     const {name, grade, type, center, maxCount, payment, teacherPricePerClass, centerPricePerClass} = req.body;
@@ -76,6 +78,59 @@ const editGroup = async (req, res) =>{
   }
 }
 
+const editGroupsMoney = async (req, res) => {
+  const { grade, teacherPricePerClass, centerPricePerClass } = req.body;
+  console.log("Grade: ", grade);
+
+  try {
+    const updatedGroups = await Group.updateMany(
+      { grade },
+      {
+        $set: {
+          teacherPricePerClass,
+          centerPricePerClass,
+        },
+      }
+    );
+
+    const pricePerClass = teacherPricePerClass + centerPricePerClass;
+    const pricePerMonth = pricePerClass * 8;
+
+    await Group.updateMany(
+      { grade },
+      {
+        $set: {
+          pricePerClass,
+          pricePerMonth,
+        },
+      }
+    );
+
+    const groups = await Group.find({ grade });
+    console.log("Groups: ", groups);
+
+    const groupIds = groups.map(group => group._id);
+    console.log("Group ids: ", groupIds);
+
+    await Student.updateMany(
+      { group: { $in: groupIds } },
+      {
+        $set: {
+          money: pricePerMonth,
+        },
+      }
+    );
+
+    console.log("Group and student money edited successfully.");
+    res.status(200).json({ message: 'Group and student money edited successfully' });
+
+  } catch (error) {
+    console.error("Cannot edit group money:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
 const deleteAllGroups = async (req, res) => {
   try{
     await Group.deleteMany()
@@ -86,4 +141,42 @@ const deleteAllGroups = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 }
-module.exports = {addGroup, getGroup, allGroups, editGroup, deleteAllGroups}
+
+const exportToExcel = async (req, res) => {
+  try {
+    const groups = await Group.find().lean();
+    
+    // Create a new workbook and add a worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheetData = groups.map(group => ({
+      'Name': group.name,
+      'Grade': group.grade,
+      'Type': group.type,
+      'Center': group.center,
+      'Max Count': group.maxCount,
+      'Current Class': group.currentClass,
+      'Current Month': group.currentMonth,
+      'Class Active': group.classActive ? 'Yes' : 'No',
+      'Valid Seats': group.validSeats,
+      'Payment': group.payment,
+      'Teacher Price Per Class': group.teacherPricePerClass,
+      'Center Price Per Class': group.centerPricePerClass,
+      'Price Per Class': group.pricePerClass,
+      'Price Per Month': group.pricePerMonth
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Groups');
+
+    const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+
+    res.setHeader('Content-Disposition', 'attachment; filename=groups.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.status(200).send(buffer);
+  } catch (error) {
+    console.log("Can not get groups");
+    res.status(400).json({ error: error.message });
+  }
+};
+
+module.exports = {addGroup, getGroup, allGroups, editGroup, deleteAllGroups, editGroupsMoney, exportToExcel}

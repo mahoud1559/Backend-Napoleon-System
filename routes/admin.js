@@ -3,12 +3,16 @@ const multer = require("multer");
 const upload = multer({ dest: "uploads/" });
 
 const {loginAdmin, alladmins, addAdmin} = require('../controllers/adminController')
-const {addGroup, getGroup, allGroups, editGroup, deleteAllGroups} = require('../controllers/groupController')
+const {
+    addGroup, getGroup, allGroups, 
+    editGroup, deleteAllGroups, editGroupsMoney, exportToExcel
+} = require('../controllers/groupController')
 const {
     addStudent, getStudent, getAllStudents,
     searchCode, deleteAllStudents, 
     deleteStudent, editStudent, payStudent,
-    startClass, endClass, studentAttendance
+    startClass, endClass, studentAttendance,
+    exportStudentsToExcel, zeroDiscount
 } = require('../controllers/studentController')
 const { 
     addPrintHouse, getPrintHouse, 
@@ -37,16 +41,20 @@ router.get('/groups', allGroups)
 router.get('/getGroup/:grade', getGroup)
 router.patch('/editgroup/:id', editGroup)
 router.delete('/deleteAllGroups', deleteAllGroups)
+router.patch('/editGroupsMoney', editGroupsMoney)
+router.get('/exportToExcel', exportToExcel)
 
 router.post('/addStudent', addStudent)
 router.get('/search', searchCode)
 router.get('/getAllStudents', getAllStudents)
-router.post('/getStudent', getStudent)
+router.get('/getStudent', getStudent)
 router.delete('/deleteAllStudents', deleteAllStudents)
 router.delete('/deleteStudent/:code', deleteStudent)
 router.patch('/editStudent/:id', editStudent)
 router.patch('/payStudent/:id', payStudent)
 router.patch('/studentAttendance', studentAttendance)
+router.get('/exportStudentsToExcel', exportStudentsToExcel)
+router.patch('/zeroDiscount', zeroDiscount)
 
 router.post('/addPrintHouse', addPrintHouse)
 router.get('/getPrintHouse/:id', getPrintHouse)

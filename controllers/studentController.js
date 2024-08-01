@@ -1,6 +1,7 @@
 const Student = require("../models/StudentModel");
 const Group = require("../models/groupModel");
 const Center = require("../models/centerModel");
+const XLSX = require('xlsx');
 
 const addStudent = async (req, res) => {
   const { name, phone, parentPhone, grade, group, code, payment } = req.body;
@@ -264,8 +265,16 @@ const editStudent = async (req, res) => {
 
 const payStudent = async (req, res) => {
   const { id } = req.params;
-  const { paymentPrice} = req.body;
+  let { paymentPrice, discount} = req.body;
+  paymentPrice = parseInt(paymentPrice);
+  if(discount === ""){
+    discount = 0;
+  }
+  else{
+  discount = parseInt(discount);
+  }
   console.log("Payment Price: ", paymentPrice);
+  console.log("Discount: ", discount);
   console.log("Student ID: ", id)
   try {
     const student = await Student.findById(id).populate("group");
@@ -278,6 +287,12 @@ const payStudent = async (req, res) => {
     }
     if (paymentPrice < 0) {
       throw Error("لا يمكن إدخال قيمة سالبة");
+    }
+    if (discount < 0) {
+      throw Error("لا يمكن إدخال خصم سالب");
+    }
+    if (parseInt(discount) > parseInt(paymentPrice)) {
+      throw Error("الخصم أكبر من قيمة الدفع");
     }
     if (paymentPrice > student.group.pricePerMonth) {
       throw Error("القيمة المدخلة أكبر من مستحقات الشهر");
@@ -298,7 +313,14 @@ const payStudent = async (req, res) => {
       console.log("Center amount scholarship: ", centerAmount);
     }
     else{
-      centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * paymentPrice
+      if(discount > 0){
+        centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * (paymentPrice + discount)
+        console.log("Center amount discount: ", centerAmount);
+      }
+      else if(discount === 0){
+        centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * paymentPrice
+        console.log("Center amount discount 0: ", centerAmount);
+      }
       console.log("Center amount not scholarship: ", centerAmount);
     }
 
@@ -333,30 +355,6 @@ const payStudent = async (req, res) => {
         });
       }
       
-      // if (moneyDetails) {
-      //   moneyDetails.total += centerAmount;
-      //   moneyDetails.students.push({
-      //     studentCode: student.code,
-      //     studentName: student.name,
-      //     group: group.name,
-      //     totalPaid: paymentPrice,
-      //     centerMoney: centerAmount,
-      //     date: new Date().toISOString().slice(0, 10),
-      //   });
-      // }
-      // else {
-      //   existingMoney.moneyDetails.push({
-      //       students: [{
-      //         studentCode: student.code,
-      //         studentName: student.name,
-      //         group: group.name,
-      //         totalPaid: paymentPrice,
-      //         centerMoney: centerAmount,
-      //         date: new Date().toISOString().slice(0, 10),
-      //     }],
-      //     total: centerAmount,
-      //   });
-      // }
     }
      else {
       center.money.push({
@@ -382,8 +380,18 @@ const payStudent = async (req, res) => {
     center.remaining += (student.group.centerPricePerClass * 8 - centerAmount);
     center.paid += centerAmount;
 
-    console.log("student.money - paymentPrice = ", student.money - paymentPrice)
-    student.money = student.money - paymentPrice;
+    console.log("student.money - (paymentPrice - discount) = ", student.money - (paymentPrice - discount))
+    if(student.discount === 0){
+      student.money = student.money - (paymentPrice + discount)
+      student.discount = discount;
+    }
+    else if(student.discount > 0){
+      student.money = student.money - (paymentPrice - student.discount)
+    }
+    else{
+      student.money = student.money - paymentPrice
+    }
+
     await center.save();
     await student.save();
     console.log("Student: ", student);
@@ -444,13 +452,13 @@ const startClass = async (req, res) =>{
         }
         if(latestClass.sort === 8){
           console.log("Class sort is 8");
-          newClassOrder += classIncrement;
+          newClassOrder = classIncrement;
           currentMonth++;
           if(student.payment === "منحة"){
-            student.money = 0;
+            student.money = g.centerPricePerClass * 8;
           }
           else{
-            student.money += g.pricePerMonth;
+            student.money += (g.pricePerMonth + student.discount);
           }
         }
         else{
@@ -476,7 +484,7 @@ const startClass = async (req, res) =>{
     }
     
     if(g.currentClass === 8){
-      g.currentClass += classIncrement;
+      g.currentClass = classIncrement;
       g.currentMonth += 1;
     }
     else{
@@ -596,6 +604,67 @@ const studentAttendance = async (req, res) => {
   }
 }
 
+const exportStudentsToExcel = async (req, res) => {
+  try {
+    const students = await Student.find({}).populate("group").lean();
+
+    const workbook = XLSX.utils.book_new();
+    const worksheetData = students.map(student => ({
+      'Name': student.name,
+      'Phone': student.phone,
+      'Parent Phone': student.parentPhone,
+      'Grade': student.grade,
+      'Group': student.group.name,
+      'Code': student.code,
+      'Date': new Date(student.date).toLocaleDateString(),
+      'Payment': student.payment,
+      'Status': student.status,
+      'Payment Status': student.paymentStatus,
+      'Money': student.money,
+      'Absence': student.absence,
+      'Classes': JSON.stringify(student.class.map(c => ({
+        date: new Date(c.date).toLocaleDateString(),
+        sort: c.sort,
+        month: c.month,
+        attendance: c.attendance
+      }))),
+      'Exams': JSON.stringify(student.exams.map(e => ({
+        examName: e.examName,
+        studentMark: e.studentMark,
+        examMark: e.examMark,
+        examDate: new Date(e.examDate).toLocaleDateString(),
+        examType: e.examType
+      })))
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
+
+    const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+
+    res.setHeader('Content-Disposition', 'attachment; filename=students.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.status(200).send(buffer);
+  } catch (error) {
+    console.error("Error in exporting to excel:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const zeroDiscount = async (req, res) => {
+    try {
+        const students = await Student.find({}).populate("group");
+        for (const student of students) {
+            student.discount = 0;
+            await student.save();
+        }
+        res.status(200).json({ message: "Discounts reset successfully" });
+    } catch (error) {
+        console.error("Error in resetting discounts:", error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
 
 module.exports = {
   addStudent,
@@ -608,5 +677,7 @@ module.exports = {
   payStudent,
   startClass,
   endClass,
-  studentAttendance
+  studentAttendance,
+  exportStudentsToExcel,
+  zeroDiscount
 };
