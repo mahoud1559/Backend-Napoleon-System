@@ -291,9 +291,9 @@ const payStudent = async (req, res) => {
     if (discount < 0) {
       throw Error("لا يمكن إدخال خصم سالب");
     }
-    if (parseInt(discount) > parseInt(paymentPrice)) {
-      throw Error("الخصم أكبر من قيمة الدفع");
-    }
+    // if (parseInt(discount) > parseInt(paymentPrice)) {
+    //   throw Error("الخصم أكبر من قيمة الدفع");
+    // }
     if (paymentPrice > student.group.pricePerMonth) {
       throw Error("القيمة المدخلة أكبر من مستحقات الشهر");
     }
@@ -314,7 +314,7 @@ const payStudent = async (req, res) => {
     }
     else{
       if(discount > 0){
-        centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * (paymentPrice + discount)
+        centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * (paymentPrice)
         console.log("Center amount discount: ", centerAmount);
       }
       else if(discount === 0){
@@ -386,10 +386,14 @@ const payStudent = async (req, res) => {
       student.discount = discount;
     }
     else if(student.discount > 0){
-      student.money = student.money - (paymentPrice - student.discount)
+      student.money = student.money - (paymentPrice + student.discount)
     }
     else{
       student.money = student.money - paymentPrice
+    }
+
+    if(student.money === 0){
+      student.paymentStatus = "دفع"
     }
 
     await center.save();
@@ -574,8 +578,14 @@ const studentAttendance = async (req, res) => {
     if(!g){
       throw Error("يجب تسجيل المجموعة")
     }
+
     const student = await Student.findOne({code}).populate("group");
+
     console.log("Attending Student: ", student);
+    if(student.grade != g.grade){
+      throw Error("هذا الطالب ليس في هذه المرحلة");
+    }
+
     if(!student){
       throw Error("هذا الطالب غير مسجل");
     }
@@ -599,7 +609,7 @@ const studentAttendance = async (req, res) => {
       message: "تم تسجيل حضور الطالب بنجاح"
     });
   } catch (error) {
-    console.error("Error in student attendance:", error);
+    console.error("Error in student attendance:", error.message);
     res.status(500).json({ error: error.message });
   }
 }
