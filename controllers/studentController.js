@@ -267,7 +267,7 @@ const payStudent = async (req, res) => {
   const { id } = req.params;
   let { paymentPrice, discount} = req.body;
   paymentPrice = parseInt(paymentPrice);
-  if(discount === ""){
+  if(discount === "" || discount === null || discount === undefined){
     discount = 0;
   }
   else{
@@ -313,18 +313,17 @@ const payStudent = async (req, res) => {
       console.log("Center amount scholarship: ", centerAmount);
     }
     else{
-      if(discount > 0){
-        centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * (paymentPrice)
+      if(student.group.pricePerClass * 8 > paymentPrice){
+        centerAmount = centerMoneyPerClass * 2
         console.log("Center amount discount: ", centerAmount);
       }
-      else if(discount === 0){
-        centerAmount = (centerMoneyPerClass / student.group.pricePerClass) * paymentPrice
+      else if(paymentPrice === (student.group.pricePerClass * 8)){
+        centerAmount = student.group.centerPricePerClass * 8;
         console.log("Center amount discount 0: ", centerAmount);
       }
       console.log("Center amount not scholarship: ", centerAmount);
     }
 
-    console.log("Center amount: ", centerAmount);
 
     const today = new Date().toISOString().slice(0, 10);
 
@@ -340,7 +339,7 @@ const payStudent = async (req, res) => {
       console.log("Existing Money Money Details: ", existingMoney.moneyDetails);
       if(moneyDetails){
         moneyDetails.totalPaid += parseInt(centerAmount);
-        moneyDetails.centerMoney += student.group.centerPricePerClass * 8;
+        moneyDetails.centerMoney = student.group.centerPricePerClass * 8;
         moneyDetails.date = today;
       }
       else{
@@ -377,8 +376,14 @@ const payStudent = async (req, res) => {
       student.paymentStatus = "دفع"
     }
 
-    center.remaining += (student.group.centerPricePerClass * 8 - centerAmount);
+    console.log("Center remaining: ", center.remaining);
+    console.log("Center paid: ", center.paid);
+
+    center.remaining? center.remaining -= centerAmount : 0;
     center.paid += centerAmount;
+
+    console.log("Center remaining: ", center.remaining);
+    console.log("Center paid: ", center.paid);
 
     console.log("student.money - (paymentPrice - discount) = ", student.money - (paymentPrice - discount))
     if(student.discount === 0){
