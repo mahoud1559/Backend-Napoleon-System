@@ -14,7 +14,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      "https://frontend-system-napleon.vercel.app",
+      "https://frontend-system-napoleon.vercel.app",
       "",
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
