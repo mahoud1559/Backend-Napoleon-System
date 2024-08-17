@@ -10,18 +10,6 @@ const app = express();
 
 app.use(express.json());
 
-app.use(
-  cors({
-    origin: [
-      "http://localhost:3000",
-      "https://frontend-system-napoleon.vercel.app",
-      "",
-    ],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-  })
-);
 
 app.use("/admin", adminRoute);
 
