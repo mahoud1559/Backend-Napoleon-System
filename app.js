@@ -16,7 +16,7 @@ app.use(
       "http://localhost:3000",
       "https://frontend-system-napoleon.vercel.app",
       "https://system-teacher-clone.vercel.app",
-      "",
+      "https://frontend-system-napleon.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     preflightContinue: false,
